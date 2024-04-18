@@ -1,7 +1,7 @@
 import os
 import sys
 import csv
-import warnings
+# import warnings
 import openpyxl as xl
 import re
 
@@ -12,8 +12,8 @@ re_lesson = re.compile(r'^第(\d+)-(\d+)节$')  # 检测节数
 re_lesson_experiment = re.compile(r'^(\d+)-(\d+)节$')  # 检测节数(实验课)
 re_name_experiment = re.compile(r'【实验】')  # 实验课程名称检测
 
-# functions
-warnings.filterwarnings('error')
+
+# warnings.filterwarnings('error')
 
 
 # core function
@@ -24,8 +24,8 @@ def process():
     inputdir = os.path.dirname(temp)
     try:
         wb = xl.load_workbook(temp)
-    except:
-        print('提示: 由于校网的Excel文档使用Apache POI制作，系统无法识别，需先用Excel/WPS打开并保存，才可继续操作。系统将自行退出。')
+    except Exception as e:
+        print('打开工作表时发生错误'+'错误信息：\n' + str(e))
         sys.exit(1)
     combine = False
     show_info_as_teacher = False
@@ -40,54 +40,55 @@ def process():
     ncols = table.max_column
 
     ind = 0
-    data = [["课程名称", "星期", "开始节数", "结束节数", "老师", "地点", "周数"]]
-
     # 表头输入
-
-    def data_process(inf, index, week):
-        for item in inf:
-            if re.match(re_lesson, item):
-                data[index][2] = re.match(re_lesson, item).groups()[0]  # 开始节数
-                data[index][3] = re.match(re_lesson, item).groups()[1]  # 结束节数
-            elif re.match(re_number, item):
-                if re.match(re_number, item).groups()[0][-1] == '周':  # (非实验课)
-                    data[index][6] = re.match(re_number, item).groups()[0][:-1]  # 周数
-                    data[index][5] = re.match(re_number, item).groups()[1]  # 地点
-                else:
-                    data[index][6] = re.match(re_number, item).groups()[1][:-1]  # 周数
-                    st = re.match(re_number, item).groups()[0]
-                    data[index][2] = re.match(re_lesson_experiment, st).groups()[0]  # 开始节数
-                    data[index][3] = re.match(re_lesson_experiment, st).groups()[1]  # 结束节数
-            elif re.match(re_bracket, item):  # 有中括号,教师名/实验室名
-                if re.match(re_bracket, item).groups()[0][-1].isdigit():
-                    data[index][5] = re.match(re_bracket, item).groups()[0]  # 实验室名
-                else:
-                    data[index][4] = re.match(re_bracket, item).groups()[0]  # 教师名
-            else:  # 没有特殊格式,课程名
-                index += 1
-                data.append(['', '', '', '', '', '', ''])
-                item_modified = item
-                if combine and re.match(re_name_experiment, item):  # 为实验课
-                    item_modified = item.split(' ')[0]
-                data[index][0] = item_modified  # 课程名
-                data[index][1] = week  # 星期
-                if show_info_as_teacher:
-                    try:
-                        experiment_info = item.split(' ')[1]
-                    except IndexError:
-                        experiment_info = ""
-                    finally:
-                        data[index][4] = experiment_info
-        return index
+    data = [["课程名称", "星期", "开始节数", "结束节数", "老师", "地点", "周数"]]
 
     for col_index in range(2, ncols + 1):
         for row_index in range(4, nrows + 1):
             if table.cell(row_index, col_index).value is not None:
                 ar = table.cell(row_index, col_index).value
                 lar = ar.split('\n')
-                ind = data_process(lar, ind, col_index - 1)
+                ind = data_process(lar, ind, col_index - 1, data, combine, show_info_as_teacher)
     transform_csv(data, os.path.join(inputdir, "res.csv"))
     print("写入csv完成")
+
+
+def data_process(inf, index, week, data, combine, show_info_as_teacher):
+    for item in inf:
+        if re.match(re_lesson, item):
+            data[index][2] = re.match(re_lesson, item).groups()[0]  # 开始节数
+            data[index][3] = re.match(re_lesson, item).groups()[1]  # 结束节数
+        elif re.match(re_number, item):
+            if re.match(re_number, item).groups()[0][-1] == '周':  # (非实验课)
+                data[index][6] = re.match(re_number, item).groups()[0][:-1]  # 周数
+                data[index][5] = re.match(re_number, item).groups()[1]  # 地点
+            else:
+                data[index][6] = re.match(re_number, item).groups()[1][:-1]  # 周数
+                st_end = re.match(re_number, item).groups()[0]
+                data[index][2] = re.match(re_lesson_experiment, st_end).groups()[0]  # 开始节数
+                data[index][3] = re.match(re_lesson_experiment, st_end).groups()[1]  # 结束节数
+        elif re.match(re_bracket, item):  # 有中括号,教师名/实验室名
+            if re.match(re_bracket, item).groups()[0][-1].isdigit():
+                data[index][5] = re.match(re_bracket, item).groups()[0]  # 实验室名
+            else:
+                data[index][4] = re.match(re_bracket, item).groups()[0]  # 教师名
+        else:  # 没有特殊格式,课程名
+            index += 1
+            data.append(['', '', '', '', '', '', ''])
+            item_modified = item
+            if combine and re.match(re_name_experiment, item):  # 为实验课
+                item_modified = item.split(' ')[0]
+            data[index][0] = item_modified  # 课程名
+            data[index][1] = week  # 星期
+            experiment_info = ""
+            if show_info_as_teacher:
+                try:
+                    experiment_info = item.split(' ')[1]
+                except IndexError:
+                    experiment_info = ""
+                finally:
+                    data[index][4] = experiment_info
+    return index
 
 
 # 转csv格式函数

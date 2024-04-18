@@ -1,10 +1,10 @@
 import os
-import tkinter as tk
+# import tkinter as tk
 import csv
 # import warnings
 from openpyxl import load_workbook
 import re
-from tkinter import scrolledtext, messagebox, filedialog
+from tkinter import Tk, Label, Button, Entry, Frame, StringVar, scrolledtext, messagebox, filedialog
 
 # regex patterns
 re_bracket = re.compile(r'^\[(.+)]$')  # 检测中括号
@@ -19,7 +19,7 @@ re_name_experiment = re.compile(r'【实验】')  # 实验课程名称检测
 
 
 def select_file():
-    selected_file_path = tk.filedialog.askopenfilename()
+    selected_file_path = filedialog.askopenfilename(filetypes=[("xlsx表格", ".xlsx")])
     select_path.set(selected_file_path)
 
 
@@ -51,12 +51,24 @@ def process():
     ncols = table.max_column
 
     ind = 0
+    # 表头输入
     data = [["课程名称", "星期", "开始节数", "结束节数", "老师", "地点", "周数"]]
 
-    # 表头输入
+    for col_index in range(2, ncols + 1):
+        for row_index in range(4, nrows + 1):
+            if table.cell(row_index, col_index).value is not None:
+                cell_values = table.cell(row_index, col_index).value
+                cell_item = cell_values.split('\n')
+                ind = data_process(cell_item, ind, col_index - 1, data, combine, show_info_as_teacher)
+                if ind == -1:
+                    return
+    transform_csv(data, os.path.join(inputdir, "res.csv"))
+    insert_message("写入csv完成\n")
 
-    def data_process(inf, index, week):
-        for item in inf:
+
+def data_process(inf, index, week, data, combine, show_info_as_teacher):
+    for item in inf:
+        try:
             if re.match(re_lesson, item):
                 data[index][2] = re.match(re_lesson, item).groups()[0]  # 开始节数
                 data[index][3] = re.match(re_lesson, item).groups()[1]  # 结束节数
@@ -66,9 +78,9 @@ def process():
                     data[index][5] = re.match(re_number, item).groups()[1]  # 地点
                 else:
                     data[index][6] = re.match(re_number, item).groups()[1][:-1]  # 周数
-                    st = re.match(re_number, item).groups()[0]
-                    data[index][2] = re.match(re_lesson_experiment, st).groups()[0]  # 开始节数
-                    data[index][3] = re.match(re_lesson_experiment, st).groups()[1]  # 结束节数
+                    st_end = re.match(re_number, item).groups()[0]
+                    data[index][2] = re.match(re_lesson_experiment, st_end).groups()[0]  # 开始节数
+                    data[index][3] = re.match(re_lesson_experiment, st_end).groups()[1]  # 结束节数
             elif re.match(re_bracket, item):  # 有中括号,教师名/实验室名
                 if re.match(re_bracket, item).groups()[0][-1].isdigit():
                     data[index][5] = re.match(re_bracket, item).groups()[0]  # 实验室名
@@ -90,16 +102,10 @@ def process():
                         experiment_info = ""
                     finally:
                         data[index][4] = experiment_info
-        return index
-
-    for col_index in range(2, ncols + 1):
-        for row_index in range(4, nrows + 1):
-            if table.cell(row_index, col_index).value is not None:
-                ar = table.cell(row_index, col_index).value
-                lar = ar.split('\n')
-                ind = data_process(lar, ind, col_index - 1)
-    transform_csv(data, os.path.join(inputdir, "res.csv"))
-    insert_message("写入csv完成\n")
+        except Exception as e:
+            insert_message(str(e) + '\n发生错误时处理的项：' + item)
+            return -1
+    return index
 
 
 # 转csv格式函数
@@ -113,9 +119,9 @@ def transform_csv(tab, outputdir):
 
 
 def insert_message(message):
-    scroll_inf.config(state=tk.NORMAL)
-    scroll_inf.insert(tk.END, message)
-    scroll_inf.config(state=tk.DISABLED)
+    scroll_inf.config(state="normal")
+    scroll_inf.insert("end", message)
+    scroll_inf.config(state="disabled")
 
 
 def prompt():
@@ -129,20 +135,20 @@ def prompt():
 
 
 # GUI process
-master_window = tk.Tk()
+master_window = Tk()
 master_window.title('HITsz课表信息提取程序for WakeUp课程表 V1.1(openpyxl version)')
 master_window.geometry('480x320')
 master_window.resizable(False, False)
-select_path = tk.StringVar()
-tk.Label(master_window, text='文件路径:').pack(fill=tk.X)
-filepath_entry = tk.Entry(master_window, textvariable=select_path, state=tk.DISABLED)
-filepath_entry.pack(fill=tk.X)
-button_frame = tk.Frame(master_window)
-button_frame.pack(fill=tk.X)
-tk.Button(button_frame, text='选择文件', command=select_file, width=15).pack(side="left", padx=20)
-tk.Button(button_frame, text='使用说明', command=prompt, width=15).pack(side="left", padx=25)
-tk.Button(button_frame, text='执行转换', command=lambda: process(), width=15).pack(side="right", padx=25)
+select_path = StringVar()
+Label(master_window, text='文件路径:').pack(fill="x")
+filepath_entry = Entry(master_window, textvariable=select_path, state="disabled")
+filepath_entry.pack(fill="x")
+button_frame = Frame(master_window)
+button_frame.pack(fill="x")
+Button(button_frame, text='选择文件', command=select_file, width=15).pack(side="left", padx=20)
+Button(button_frame, text='使用说明', command=prompt, width=15).pack(side="left", padx=25)
+Button(button_frame, text='执行转换', command=lambda: process(), width=15).pack(side="right", padx=25)
 scroll_inf = scrolledtext.ScrolledText(master_window, font=('楷体', 14))
-scroll_inf.pack(side=tk.BOTTOM, pady=10, fill=tk.X)
-scroll_inf.config(state=tk.DISABLED)
+scroll_inf.pack(side="bottom", pady=10, fill="x")
+scroll_inf.config(state="disabled")
 master_window.mainloop()
