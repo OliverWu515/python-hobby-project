@@ -4,7 +4,7 @@ import tkinter
 from tkinter import Tk, Label, Button, StringVar, Entry, Frame, scrolledtext, messagebox, filedialog
 import xlrd
 
-re_stuno = re.compile(r"[0-9A-Z]{9,12}")
+re_stuno = re.compile(r"[0-9A-Za-z]{9,12}")
 name_inf = {}
 
 
@@ -18,13 +18,15 @@ def read_nameinf():
         table = wb.sheet_by_index(0)
         nrows = table.nrows  # 获取表格行数
         for i in range(1, nrows):
-            name_inf[str(int(table.cell_value(i, 0)))] = str(table.cell_value(i, 1))
-        insert_message('找到' + str(len(name_inf)) + '个姓名-学号\n')
+            stuno = table.cell_value(i, 0)
+            if isinstance(stuno, (float, int)):
+                name_inf[str(int(stuno))] = str(table.cell_value(i, 1))
+            elif isinstance(stuno, str):
+                stuno_upper = stuno.upper()
+                name_inf[stuno_upper] = str(table.cell_value(i, 1))
+        insert_message('共找到' + str(len(name_inf)) + '个学号-姓名\n')
     except FileNotFoundError:
         messagebox.showerror(title='提示', message='未找到名单文件!')
-        name_inf = None
-    except ValueError as e:
-        messagebox.showerror(title='提示', message='大概率是因为第一列中的值不全是数字。具体错误信息：' + str(e))
         name_inf = None
     except Exception as e:
         messagebox.showerror(title='提示', message='错误信息为' + str(e))
@@ -70,7 +72,11 @@ def process():
             stu_no = re.findall(re_stuno, filename)[0]
         else:
             continue
-        rectified_name = replaceby.format(stu_no, name_inf[stu_no]) + filetype
+        try:
+            rectified_name = replaceby.format(stu_no, name_inf[stu_no.upper()]) + filetype
+        except KeyError:
+            insert_message('未找到学号' + stu_no + '对应的姓名！\n')
+            continue
         full_rectified_name = os.path.join(os.path.split(filename)[0], rectified_name)
         os.rename(filename, full_rectified_name)
         insert_message(os.path.split(filename)[1])
