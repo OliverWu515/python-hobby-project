@@ -59,20 +59,29 @@ def process():
             if table.cell(row_index, col_index).value is not None:
                 cell_values = table.cell(row_index, col_index).value
                 cell_item = cell_values.split('\n')
-                ind = data_process(cell_item, ind, col_index - 1, data, combine, show_info_as_teacher)
+                ind = data_process(cell_item, ind, col_index - 1, row_index - 3, data, combine, show_info_as_teacher)
                 if ind == -1:
                     return
+    if data[-1] is None:
+        data[-1] = ['', '', '', '', '', '', '']
     transform_csv(data, os.path.join(inputdir, "res.csv"))
     insert_message("写入csv完成\n")
 
 
-def data_process(inf, index, week, data, combine, show_info_as_teacher):
+def data_process(inf, index, week, lesson_config, data, combine, show_info_as_teacher):
     for item in inf:
         try:
             if re.match(re_lesson, item):
+                if data[index] is None:
+                    continue
                 data[index][2] = re.match(re_lesson, item).groups()[0]  # 开始节数
                 data[index][3] = re.match(re_lesson, item).groups()[1]  # 结束节数
+                if int(data[index][3]) - int(data[index][2]) >1 and int(data[index][2]) != lesson_config *2 - 1:
+                    # 防重复项，对时间跨度超过2节的课程做特殊处理
+                    data[index] = None
             elif re.match(re_number, item):
+                if data[index] is None:
+                    continue
                 if re.match(re_number, item).groups()[0][-1] == '周':  # (非实验课)
                     data[index][6] = re.match(re_number, item).groups()[0][:-1]  # 周数
                     data[index][5] = re.match(re_number, item).groups()[1]  # 地点
@@ -81,14 +90,21 @@ def data_process(inf, index, week, data, combine, show_info_as_teacher):
                     st_end = re.match(re_number, item).groups()[0]
                     data[index][2] = re.match(re_lesson_experiment, st_end).groups()[0]  # 开始节数
                     data[index][3] = re.match(re_lesson_experiment, st_end).groups()[1]  # 结束节数
+                    if int(data[index][3]) - int(data[index][2]) >1 and int(data[index][2]) != lesson_config *2 - 1:
+                        data[index] = None
             elif re.match(re_bracket, item):  # 有中括号,教师名/实验室名
+                if data[index] is None:
+                    continue
                 if re.match(re_bracket, item).groups()[0][-1].isdigit():
                     data[index][5] = re.match(re_bracket, item).groups()[0]  # 实验室名
                 else:
                     data[index][4] = re.match(re_bracket, item).groups()[0]  # 教师名
             else:  # 没有特殊格式,课程名
-                index += 1
-                data.append(['', '', '', '', '', '', ''])
+                if data[index] is None:
+                    data[index] = ['', '', '', '', '', '', '']
+                else:
+                    index += 1
+                    data.append(['', '', '', '', '', '', ''])
                 item_modified = item
                 if combine and re.match(re_name_experiment, item):  # 为实验课
                     item_modified = item.split(' ')[0]
